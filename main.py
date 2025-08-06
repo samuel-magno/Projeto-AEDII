@@ -1,72 +1,80 @@
-import pandas as pd
-import matplotlib.pyplot as plt
-import numpy as np
+import argparse
 import time
+from src.data import DataLoader
+from src.benchmark import PatternGenerator, SearchProfiler
+from src.algorithms import BruteForceSearch, BoyerMooreSearch
+from src.utils import ResultAnalyzer
 
-# Algoritmos (como definidos antes)
-def brute_force(text, pattern):
-    n, m = len(text), len(pattern)
-    for i in range(n - m + 1):
-        if text[i:i+m] == pattern:
-            return i
-    return -1
+def main():
+    parser = argparse.ArgumentParser(
+        description="Benchmark Força Bruta vs Boyer-Moore em SMS Spam"
+    )
+    parser.add_argument("--data-path",   type=str, required=True,
+                        help="Caminho para o CSV do dataset")
+    parser.add_argument("--pattern-sizes", type=int, nargs='+', default=[5,10,20,50],
+                        help="Tamanhos de padrões a gerar (aleatório)")
+    parser.add_argument("--samples-per-size", type=int, default=10,
+                        help="Quantidade de padrões aleatórios por tamanho")
+    parser.add_argument("--search-reps",  type=int, default=10,
+                        help="Repetições de busca para estatísticas")
+    parser.add_argument("--seed",         type=int, default=42,
+                        help="Seed para aleatoriedade reproduzível")
+    parser.add_argument("--fixed-pattern", type=str, default=None,
+                        help="Se passado, usa apenas este padrão fixo")
+    parser.add_argument("--output",       type=str, default="benchmark_results.csv",
+                        help="Arquivo CSV de saída")
+    args = parser.parse_args()
 
-def build_bad_char_table(pattern):
-    table = [-1] * 256
-    for i in range(len(pattern)):
-        table[ord(pattern[i])] = i
-    return table
+    messages = DataLoader.load_sms_data(args.data_path)
 
-def boyer_moore(text, pattern):
-    n, m = len(text), len(pattern)
-    bad_char = build_bad_char_table(pattern)
-    s = 0
-    while s <= n - m:
-        j = m - 1
-        while j >= 0 and pattern[j] == text[s + j]:
-            j -= 1
-        if j < 0:
-            return s
-        s += max(1, j - bad_char[ord(text[s + j])] if ord(text[s + j]) < 256 else 1)
-    return -1
+    if args.fixed_pattern:
+        patterns_map = {len(args.fixed_pattern): [args.fixed_pattern.lower()]}
+    else:
+        patterns_map = PatternGenerator.generate_patterns(
+            messages,
+            args.pattern_sizes,
+            args.samples_per_size,
+            args.seed
+        )
 
-# Carregando o CSV
-df = pd.read_csv("spam_dataset.csv", encoding="latin1")
-spam_messages = df[df['v1'] == 'spam']['v2'].head(400)
+    algorithms = {
+        "bf": BruteForceSearch(),
+        "bm": BoyerMooreSearch()
+    }
+    
+    rows = []
+    for size, pats in patterns_map.items():
+        for pat in pats:
+            build_time_ms = 0.0
+            if isinstance(algorithms["bm"], BoyerMooreSearch):
+                start_build = time.perf_counter()
+                algorithms["bm"].preprocess(pat)
+                build_time_ms = (time.perf_counter() - start_build) * 1e3
 
-# Padrão de busca
-pattern = "limited time offer"
-print(f"pattern: {pattern}\n")
+            results = {}
+            for algo_name, algorithm in algorithms.items():
+                stats = SearchProfiler.benchmark(
+                    algorithm,
+                    messages,
+                    pat,
+                    args.search_reps
+                )
+                results[algo_name] = stats
 
-# Avaliação dos algoritmos
-print("Força Bruta:")
-start = time.time()
-for msg in spam_messages:
-    brute_force(msg.lower(), pattern.lower())
-end = time.time()
-tempo_bruta = end - start
-print(f"Tempo total: {tempo_bruta:.5f} s\n")
+            speedup = results["bf"]["mean_s"] / results["bm"]["mean_s"] if results["bm"]["mean_s"] > 0 else 0
+            
+            row = {
+                "pattern_size": size,
+                "pattern": pat,
+                "build_time_ms": build_time_ms,
+                "speedup": speedup
+            }
+            for algo_name, stats in results.items():
+                for k, v in stats.items():
+                    row[f"{algo_name}_{k}"] = v
+            rows.append(row)
 
-print("Boyer-Moore:")
-start = time.time()
-for msg in spam_messages:
-    boyer_moore(msg.lower(), pattern.lower())
-end = time.time()
-tempo_boyer = end - start
-print(f"Tempo total: {tempo_boyer:.5f} s")
+    ResultAnalyzer.save_results(rows, args.output)
 
-# Resultados em gráficos
-tempos = {
-     'Força Bruta': tempo_bruta,
-     'Boyer-Moore': tempo_boyer
-}
-
-algorithms = list(tempos.keys())
-execution_times = list(tempos.values())
-
-plt.figure(figsize=(8, 5))
-plt.bar(algorithms, execution_times, color=['blue', 'green'])
-plt.ylabel('Tempo de Execução (segundos)')
-plt.title('Comparação do Tempo de Execução dos Algoritmos de Busca de Padrão')
-
-plt.show()
+if __name__ == "__main__":
+    main()
