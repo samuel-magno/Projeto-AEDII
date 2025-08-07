@@ -1,4 +1,3 @@
-# src/data/vocab_builder.py
 from collections import Counter
 from typing import List, Tuple
 
