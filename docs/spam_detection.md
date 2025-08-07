@@ -95,7 +95,7 @@ python main.py \
   --search-reps 3
 ```
 
-> Usa “free”, “cash” e “offer” e só marca spam se ≥1 aparecerem.
+> Usa “awarded”, “guaranteed” e “prize” e só marca spam se ≥1 aparecerem.
 
 ### Exemplo 2: Vocabulário automático
 
