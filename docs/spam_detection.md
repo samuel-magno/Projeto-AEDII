@@ -82,7 +82,7 @@ python main.py \
 
 ---
 
-## 🛠️ Exemplos de uso
+## Exemplos de uso
 
 ### Exemplo 1: Padrões customizados
 
@@ -112,7 +112,7 @@ python main.py \
 
 ---
 
-## 📊 Interpretação dos resultados
+## Interpretação dos resultados
 
 - **Matriz de Confusão** (TP, FP, TN, FN)\
   Avalia quantos spams reais foram identificados corretamente (TP), falsos positivos (FP) etc.
