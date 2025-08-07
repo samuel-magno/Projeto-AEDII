@@ -3,6 +3,9 @@ import time
 import os
 import pandas as pd
 import shutil
+
+import matplotlib.pyplot as plt
+
 from src.data import DataLoader
 from src.benchmark import PatternGenerator, SearchProfiler
 from src.algorithms import BruteForceSearch, BoyerMooreSearch
@@ -82,6 +85,8 @@ def main():
             shutil.rmtree("detection_reports")
         os.makedirs("detection_reports")
 
+        perf_stats = {}
+
         for name, alg in algorithms.items():
             print(f"\n=== Algoritmo: {name} ===")
             classifier = SpamClassifier(patterns, alg, args.threshold)
@@ -99,6 +104,8 @@ def main():
             stats = ClassifierProfiler.benchmark_classification(
                 classifier, texts, args.search_reps
             )
+            perf_stats[name] = stats
+
             print("— Performance da classificação —")
             print(f" Tempo médio total: {stats['mean_s']:.3f} s")
             print(f" Stdev total:       {stats['stdev_s']:.3f} s")
@@ -138,6 +145,40 @@ def main():
             spam_path = f"detection_reports/spam_only_{name}.csv"
             spam_only.to_csv(spam_path, index=False)
             print(f"Gravado apenas spams em {spam_path}")
+
+        labels_alg = list(perf_stats.keys())
+        mean_times = [perf_stats[n]['mean_s'] for n in labels_alg]
+        memory_usage = [perf_stats[n]['space_bytes'] for n in labels_alg]
+        per_msg_times  = [perf_stats[n]['mean_per_msg_ms'] for n in labels_alg]
+
+        fig, axs = plt.subplots(3, 1, figsize=(10, 12))
+        fig.suptitle("Comparação: Força Bruta vs Boyer-Moore - Classificação de Spam", fontsize=16, fontweight='bold')
+
+        axs[0].bar(labels_alg, mean_times, color=['blue', 'green'])
+        axs[0].set_ylabel('Tempo de Execução (s)')
+        axs[0].set_title('Tempo médio de classificação por algoritmo')
+
+        axs[1].bar(labels_alg, memory_usage)
+        axs[1].set_ylabel('Uso de memória (bytes)')
+        axs[1].set_title('Memória alocada para classificação por algoritmo')
+
+        axs[2].plot(
+            labels_alg,
+            per_msg_times,
+            marker='o',
+            linestyle='-',
+            label='Tempo/mensagem (ms)'
+        )
+        axs[2].set_title("Tempo médio por mensagem (ms)")
+        axs[2].set_xlabel("Algoritmo")
+        axs[2].set_ylabel("Tempo por mensagem (ms)")
+        axs[2].legend()
+        axs[2].grid(True)
+
+        plt.tight_layout()
+        plt.subplots_adjust(top=0.88, hspace=0.5)
+        plt.show()
+
         return
 
     if args.fixed_pattern:
@@ -191,6 +232,7 @@ def main():
             rows.append(row)
 
     ResultAnalyzer.save_results(rows, args.output)
+
 
 if __name__ == "__main__":
     main()
