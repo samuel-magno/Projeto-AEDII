@@ -14,17 +14,19 @@ class SpamClassifier:
         self.algorithm = algorithm
         self.threshold = threshold
 
+        if isinstance(self.algorithm, BoyerMooreSearch):
+            for pat in self.patterns:
+                self.algorithm.preprocess(pat)
+
     def classify(self, text: str) -> str:
         count = 0
         lower_text = text.lower()
 
         for pat in self.patterns:
-            if isinstance(self.algorithm, BoyerMooreSearch):
-                self.algorithm.preprocess(pat)
-
             if self.algorithm.search(lower_text, pat) != -1:
                 count += 1
                 if count >= self.threshold:
                     return "spam"
 
         return "ham"
+
